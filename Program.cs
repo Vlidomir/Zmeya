@@ -2,292 +2,310 @@
 using System.Collections.Generic;
 using System.Threading;
 
+enum FoodType
+{
+    Normal,   // обычная: +1 очко, +1 длина
+    Golden,   // золотая: +5 очков, +1 длина
+    Rotten    // червивая: -1 очко, -1 длина (но не менее 3 сегментов)
+}
+
 class Program
 {
     static void Main()
     {
-        // 1. НАСТРОЙКА КОНСОЛИ
+        // Настройка консоли
         Console.Title = "Змейка";
         Console.CursorVisible = false;
         Console.SetWindowSize(80, 25);
         Console.SetBufferSize(80, 25);
-        
-        // 2. ПЕРЕМЕННЫЕ ДЛЯ ЗМЕЙКИ
+
+        // Переменные змейки
         int headX = 40;
         int headY = 12;
         int directionX = 1;
         int directionY = 0;
-        
-        // Список для хранения тела змейки
         List<(int X, int Y)> body = new List<(int X, int Y)>();
         int bodyLength = 3;
-        
-        // Инициализируем начальное тело
         for (int i = 1; i <= bodyLength; i++)
-        {
             body.Add((headX - i, headY));
-        }
-        
-        // 3. ЕДА
+
+        // Еда
         Random random = new Random();
-        int foodX, foodY;
+        int foodX = 0, foodY = 0;
+        FoodType currentFoodType;
         int score = 0;
-        
-        // Очищаем консоль и рисуем статичные элементы
+
+        // Препятствия
+        List<(int X, int Y)> obstacles = new List<(int X, int Y)>();
+        const int obstacleCount = 5;
+
+        // Скорость
+        int delay = 100;
+        const int minDelay = 30;
+
+        // Отрисовка статики
         Console.Clear();
         DrawBorder();
-        
-        // Генерируем первую еду
+        GenerateObstacles();
         GenerateFood();
-        
-        // Рисуем начальное состояние
         DrawSnake();
         DrawFood();
         DrawScore();
-        
-        // 4. ИГРОВОЙ ЦИКЛ
+
+        // Игровой цикл
         while (true)
         {
-            // === ЧАСТЬ 1: УПРАВЛЕНИЕ ===
+            // Управление
             if (Console.KeyAvailable)
             {
                 ConsoleKeyInfo key = Console.ReadKey(true);
-                
                 switch (key.Key)
                 {
                     case ConsoleKey.UpArrow:
-                        if (directionY != 1) // Нельзя двигаться вниз, если движемся вверх
-                        {
-                            directionX = 0;
-                            directionY = -1;
-                        }
+                        if (directionY != 1) { directionX = 0; directionY = -1; }
                         break;
-                        
                     case ConsoleKey.DownArrow:
-                        if (directionY != -1) // Нельзя двигаться вверх, если движемся вниз
-                        {
-                            directionX = 0;
-                            directionY = 1;
-                        }
+                        if (directionY != -1) { directionX = 0; directionY = 1; }
                         break;
-                        
                     case ConsoleKey.LeftArrow:
-                        if (directionX != 1) // Нельзя двигаться вправо, если движемся влево
-                        {
-                            directionX = -1;
-                            directionY = 0;
-                        }
+                        if (directionX != 1) { directionX = -1; directionY = 0; }
                         break;
-                        
                     case ConsoleKey.RightArrow:
-                        if (directionX != -1) // Нельзя двигаться влево, если движемся вправо
-                        {
-                            directionX = 1;
-                            directionY = 0;
-                        }
+                        if (directionX != -1) { directionX = 1; directionY = 0; }
                         break;
-                        
                     case ConsoleKey.Escape:
                         return;
                 }
             }
-            
-            // === ЧАСТЬ 2: ДВИЖЕНИЕ ===
-            // Стираем последний сегмент хвоста (если не съели еду)
+
+            // Движение
             bool ate = false;
-            
-            // Сохраняем старую позицию головы для стирания
-            int oldHeadX = headX;
-            int oldHeadY = headY;
-            
-            // Двигаем голову
+            int oldHeadX = headX, oldHeadY = headY;
             headX += directionX;
             headY += directionY;
-            
-            // Проверка на съедание еды ДО перемещения тела
+
+            // Проверка съедания еды
             if (headX == foodX && headY == foodY)
             {
                 ate = true;
-                score++;
-                bodyLength++;
+                switch (currentFoodType)
+                {
+                    case FoodType.Normal:
+                        score++;
+                        bodyLength++;
+                        break;
+                    case FoodType.Golden:
+                        score += 5;
+                        bodyLength++;
+                        break;
+                    case FoodType.Rotten:
+                        score--;
+                        bodyLength = Math.Max(3, bodyLength - 1);
+                        break;
+                }
+                DrawScore();
+                GenerateFood();
+                DrawFood();
             }
-            
-            // Стираем хвост (только если не съели еду)
+
+            // Стираем хвост (если не съели еду)
             if (!ate && body.Count > 0)
             {
-                var lastSegment = body[body.Count - 1];
-                Console.SetCursorPosition(lastSegment.X, lastSegment.Y);
-                Console.Write(' ');
+                var last = body[body.Count - 1];
+                Console.SetCursorPosition(last.X, last.Y);
+                if (IsBorder(last.X, last.Y))
+                    Console.Write('#');
+                else
+                    Console.Write(' ');
             }
-            
-            // Сохраняем старую голову в тело
+
+            // Обновляем тело
             if (body.Count > 0)
             {
-                // Добавляем старую голову в начало тела
                 body.Insert(0, (oldHeadX, oldHeadY));
-                
-                // Если не съели еду, удаляем последний сегмент
                 if (!ate && body.Count > bodyLength)
-                {
                     body.RemoveAt(body.Count - 1);
-                }
-                // Если съели, просто увеличиваем длину
                 else if (ate)
-                {
                     bodyLength++;
-                }
             }
             else if (ate)
             {
-                // Если тела нет, добавляем первый сегмент
                 body.Add((oldHeadX, oldHeadY));
             }
-            
-            // === ПРОВЕРКА СТОЛКНОВЕНИЙ ===
-            // Со стенами
-            if (headX <= 0 || headX >= Console.WindowWidth - 1 || 
+
+            // Проверка столкновений
+            if (headX <= 0 || headX >= Console.WindowWidth - 1 ||
                 headY <= 0 || headY >= Console.WindowHeight - 1)
             {
                 GameOver();
                 break;
             }
-            
-            // С самим собой
+
+            foreach (var obs in obstacles)
+                if (headX == obs.X && headY == obs.Y)
+                {
+                    GameOver();
+                    break;
+                }
+
             bool collision = false;
-            foreach (var segment in body)
-            {
-                if (headX == segment.X && headY == segment.Y)
+            foreach (var seg in body)
+                if (headX == seg.X && headY == seg.Y)
                 {
                     collision = true;
                     break;
                 }
-            }
-            
             if (collision)
             {
                 GameOver();
                 break;
             }
-            
-            // === ЧАСТЬ 3: ОТРИСОВКА ===
+
+            // Отрисовка
             // Стираем старую голову
-            Console.SetCursorPosition(oldHeadX, oldHeadY);
-            // Проверяем, не была ли старая голова частью тела (если да, то рисуем тело)
             bool wasBody = false;
-            foreach (var segment in body)
-            {
-                if (segment.X == oldHeadX && segment.Y == oldHeadY)
-                {
-                    wasBody = true;
-                    break;
-                }
-            }
-            
-            if (!wasBody)
-            {
-                Console.Write(' ');
-            }
+            foreach (var seg in body)
+                if (seg.X == oldHeadX && seg.Y == oldHeadY) { wasBody = true; break; }
+            Console.SetCursorPosition(oldHeadX, oldHeadY);
+            if (IsBorder(oldHeadX, oldHeadY))
+                Console.Write('#');
             else
-            {
-                Console.Write('o');
-            }
-            
+                Console.Write(wasBody ? 'o' : ' ');
+
             // Рисуем новую голову
             Console.SetCursorPosition(headX, headY);
             Console.Write('O');
-            
-            // Перерисовываем тело (только измененные сегменты)
-            for (int i = 0; i < body.Count; i++)
+
+            // Перерисовываем тело
+            foreach (var seg in body)
             {
-                Console.SetCursorPosition(body[i].X, body[i].Y);
+                Console.SetCursorPosition(seg.X, seg.Y);
                 Console.Write('o');
             }
-            
-            // Если съели еду, генерируем новую и обновляем счет
-            if (ate)
-            {
-                GenerateFood();
-                DrawFood();
-                DrawScore();
-            }
-            
-            // === ЧАСТЬ 4: ЗАДЕРЖКА ===
-            Thread.Sleep(100);
+
+            // Управление скоростью
+            int targetDelay = Math.Max(minDelay, 100 - (score / 5) * 5);
+            if (delay > targetDelay) delay = targetDelay;
+
+            Thread.Sleep(delay);
         }
-        
+
+        // ---- Вспомогательные методы ----
+
+        bool IsBorder(int x, int y)
+        {
+            return x == 0 || x == Console.WindowWidth - 1 || y == 0 || y == Console.WindowHeight - 1;
+        }
+
+        void GenerateObstacles()
+        {
+            obstacles.Clear();
+            for (int i = 0; i < obstacleCount; i++)
+            {
+                bool valid;
+                do
+                {
+                    valid = true;
+                    int x = random.Next(1, Console.WindowWidth - 2);
+                    int y = random.Next(1, Console.WindowHeight - 2);
+
+                    if (x == headX && y == headY) valid = false;
+                    foreach (var seg in body)
+                        if (x == seg.X && y == seg.Y) { valid = false; break; }
+                    if (valid && foodX == x && foodY == y) valid = false;
+                    foreach (var obs in obstacles)
+                        if (obs.X == x && obs.Y == y) { valid = false; break; }
+
+                    if (valid) obstacles.Add((x, y));
+                } while (!valid);
+            }
+            foreach (var obs in obstacles)
+            {
+                Console.SetCursorPosition(obs.X, obs.Y);
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write('#');
+                Console.ResetColor();
+            }
+        }
+
         void GenerateFood()
         {
-            bool validPosition;
+            int r = random.Next(100);
+            if (r < 70) currentFoodType = FoodType.Normal;
+            else if (r < 90) currentFoodType = FoodType.Golden;
+            else currentFoodType = FoodType.Rotten;
+
+            bool valid;
             do
             {
-                validPosition = true;
+                valid = true;
                 foodX = random.Next(1, Console.WindowWidth - 2);
                 foodY = random.Next(1, Console.WindowHeight - 2);
-                
-                // Проверяем, не попала ли еда на змейку
-                if (foodX == headX && foodY == headY)
-                    validPosition = false;
-                
-                foreach (var segment in body)
-                {
-                    if (foodX == segment.X && foodY == segment.Y)
-                    {
-                        validPosition = false;
-                        break;
-                    }
-                }
-            } while (!validPosition);
+
+                if (foodX == headX && foodY == headY) valid = false;
+                foreach (var seg in body)
+                    if (foodX == seg.X && foodY == seg.Y) { valid = false; break; }
+                foreach (var obs in obstacles)
+                    if (foodX == obs.X && foodY == obs.Y) { valid = false; break; }
+            } while (!valid);
         }
-        
+
         void DrawBorder()
         {
-            // Верхняя и нижняя граница
             for (int i = 0; i < Console.WindowWidth; i++)
             {
                 Console.SetCursorPosition(i, 0);
                 Console.Write('#');
-                
                 Console.SetCursorPosition(i, Console.WindowHeight - 1);
                 Console.Write('#');
             }
-            
-            // Левая и правая граница
             for (int i = 1; i < Console.WindowHeight - 1; i++)
             {
                 Console.SetCursorPosition(0, i);
                 Console.Write('#');
-                
                 Console.SetCursorPosition(Console.WindowWidth - 1, i);
                 Console.Write('#');
             }
         }
-        
+
         void DrawSnake()
         {
-            // Рисуем тело
-            foreach (var segment in body)
+            foreach (var seg in body)
             {
-                Console.SetCursorPosition(segment.X, segment.Y);
+                Console.SetCursorPosition(seg.X, seg.Y);
                 Console.Write('o');
             }
-            
-            // Рисуем голову
             Console.SetCursorPosition(headX, headY);
             Console.Write('O');
         }
-        
+
         void DrawFood()
         {
             Console.SetCursorPosition(foodX, foodY);
-            Console.Write('$');
+            switch (currentFoodType)
+            {
+                case FoodType.Normal:
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.Write('$');
+                    break;
+                case FoodType.Golden:
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.Write('★');
+                    break;
+                case FoodType.Rotten:
+                    Console.ForegroundColor = ConsoleColor.DarkRed;
+                    Console.Write('☠');
+                    break;
+            }
+            Console.ResetColor();
         }
-        
+
         void DrawScore()
         {
             Console.SetCursorPosition(2, 1);
             Console.Write($"Score: {score}     ");
         }
-        
+
         void GameOver()
         {
             Console.Clear();
@@ -296,6 +314,7 @@ class Program
             Console.SetCursorPosition(Console.WindowWidth / 2 - 15, Console.WindowHeight / 2 + 1);
             Console.WriteLine("Press any key to exit...");
             Console.ReadKey(true);
+            Environment.Exit(0);
         }
     }
 }
