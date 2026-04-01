@@ -25,7 +25,7 @@ class Program
     static FoodType currentFoodType;
 
     static int score = 0;
-    static int delay = 70;            // начальная задержка 70 мс (быстрее)
+    static int delay = 50;            // начальная задержка 70 мс (быстрее)
     const int minDelay = 20;          // минимальная 20 мс
 
     static List<(int X, int Y)> obstacles = new List<(int X, int Y)>();
@@ -123,7 +123,7 @@ class Program
             RedrawField();
 
             // Ускорение: каждые 3 очка уменьшаем задержку на 5 мс
-            int targetDelay = Math.Max(minDelay, 70 - (score / 3) * 5);
+            int targetDelay = Math.Max(minDelay, 50 - (score / 3) * 5);
             if (delay > targetDelay) delay = targetDelay;
             Thread.Sleep(delay);
         }
